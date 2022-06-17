@@ -23,5 +23,5 @@ DELETE /jhands/:namespace
 
 ### List/create/delete IDs for namespace
 GET /jhands/:namespace
-POST /jhands/:namespace/new
+GET /jhands/:namespace/new
 DELETE /jhands/:namespace/:id

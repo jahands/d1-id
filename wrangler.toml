@@ -2,3 +2,8 @@ name = "d1-id"
 main = "src/index.ts"
 compatibility_date = "2022-06-17"
 route = "id.uuid.rocks/*"
+
+[[unsafe.bindings]]
+name = "D1"
+type = "cfsql"
+database = "ids"
