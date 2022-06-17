@@ -97,7 +97,7 @@ router.post("/schema", async (req, env: Env, ctx: ExecutionContext) => {
   ]);
   return new Response(JSON.stringify(data));
 });
-router.get("/demo", async (req, env: Env, ctx: ExecutionContext) => {
+router.get("/test", async (req, env: Env, ctx: ExecutionContext) => {
   const db = getDB(env);
   const users = await db.prepare("SELECT username,created_on FROM users").all();
   const namespaces = await db
