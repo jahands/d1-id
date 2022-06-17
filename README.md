@@ -2,17 +2,17 @@
 
 ## Spec
 
-### Create/delete/list users
+### List/create/delete users
+GET /users
 POST /users/:user
 DELETE /users/:user
-GET /users
 
-### Create/delete/list namespaces for user
+### List/create/delete namespaces for user
+GET /jhands
 POST /jhands/:namespace
 DELETE /jhands/:namespace
-GET /jhands
 
-### Create/delete/list IDs for namespace
+### List/create/delete IDs for namespace
+GET /jhands/:namespace
 POST /jhands/:namespace/new
 DELETE /jhands/:namespace/:id
-GET /jhands/:namespace

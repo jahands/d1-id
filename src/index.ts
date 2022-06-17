@@ -19,12 +19,51 @@ export interface Env {
   // MY_BUCKET: R2Bucket;
 }
 
-export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
-    return new Response("Hello World!");
-  },
-};
+import { Router } from "worktop";
+import { listen } from "worktop/cache";
+
+const API = new Router();
+
+/// USERS ///
+// List users
+API.add("GET", "/users", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Create user
+API.add("POST", "/users/:user", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Delete user
+API.add("DELETE", "/users/user", (req, res) => {
+  res.send(501, `not implemented`);
+});
+
+/// Namespaces ///
+// List namespaces
+API.add("GET", "/:user", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Create namespace
+API.add("POST", "/:user/:namespace", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Delete namespace
+API.add("DELETE", "/:user/:namespace", (req, res) => {
+  res.send(501, `not implemented`);
+});
+
+/// IDs ///
+// List IDs
+API.add("GET", "/:user/:namespace", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Create ID
+API.add("POST", "/:user/:namespace", (req, res) => {
+  res.send(501, `not implemented`);
+});
+// Delete ID
+API.add("DELETE", "/:user/:namespace/:id", (req, res) => {
+  res.send(501, `not implemented`);
+});
+
+listen(API.run);
