@@ -97,10 +97,21 @@ router.post("/schema", async (req, env: Env, ctx: ExecutionContext) => {
   ]);
   return new Response(JSON.stringify(data));
 });
-router.get("/test", async (req, env: Env, ctx: ExecutionContext) => {
+router.get("/demo", async (req, env: Env, ctx: ExecutionContext) => {
   const db = getDB(env);
-  const data = await db.prepare("SELECT * FROM namespaces").all();
-  return new Response(JSON.stringify(data));
+  const users = await db.prepare("SELECT username,created_on FROM users").all();
+  const namespaces = await db
+    .prepare("SELECT username,name,created_on FROM namespaces")
+    .all();
+  const ids = await db
+    .prepare("SELECT username,namespace,id,created_on FROM ids")
+    .all();
+  const data = {
+    users: users.results,
+    namespaces: namespaces.results,
+    ids: ids.results,
+  };
+  return new Response(JSON.stringify(data, null, 2));
 });
 
 /// USERS ///
