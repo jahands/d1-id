@@ -1,370 +1,42 @@
-import { Database } from "@cloudflare/d1";
-import {
-  IHTTPMethods,
-  Request as IttyRequest,
-  Route,
-  Router,
-} from "itty-router";
-import { authAdmin, authUser } from "./api/auth";
-import { ID } from "./api/ids";
-import { Namespace } from "./api/namespaces";
-import { User } from "./api/users";
-import { schema } from "./schema";
-import { IRequest, IMethods, Env } from "./types";
+import { Router } from "itty-router";
+import auth from "./api/auth";
+
+import users from "./api/users";
+import namespaces from "./api/namespaces";
+import ids from "./api/ids";
+import admin from "./api/admin";
+
+import { IRequest, IMethods } from "./api/types";
 
 const router = Router<IRequest, IMethods>();
 
-type Results<Type> = {
-  results: Type[];
-};
-function hasResults<Type>(data: any): data is Results<Type> {
-  return data.results !== undefined && data.results.length > 0;
-}
-
-let db: Database;
-
-function getDB(env: Env): Database {
-  if (!db) {
-    db = new Database(env.D1);
-  }
-  return db;
-}
-const now = () => new Date().getTime();
-function missingParams() {
-  return Response.json(
-    { error: `missing params` },
-    {
-      status: 400,
-    }
-  );
-}
-function alreadyExists(name: string) {
-  return Response.json(
-    { error: `${name} already exists` },
-    {
-      status: 400,
-    }
-  );
-}
-function notExists(name: string) {
-  return Response.json(
-    { error: `${name} does not exists` },
-    {
-      status: 400,
-    }
-  );
-}
-
-function makeID(length: number) {
-  var result = "";
-  var characters = "abcdefghijklmnopqrstuvwxyz0123456789";
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
-}
-
-async function getUserID(
-  db: Database,
-  username: string
-): Promise<number | null> {
-  const users = await db
-    .prepare("SELECT user_id FROM users WHERE username = ?")
-    .bind(username)
-    .all();
-  if (hasResults<User>(users)) {
-    return users.results[0].user_id;
-  }
-  return null;
-}
-async function getNamespaceID(
-  db: Database,
-  userID: number,
-  name: string
-): Promise<number | null> {
-  const namespaces = await db
-    .prepare(
-      "SELECT namespace_id FROM namespaces WHERE user_id = ? AND name = ?"
-    )
-    .bind(userID, name)
-    .all();
-  if (hasResults<Namespace>(namespaces)) {
-    return namespaces.results[0].namespace_id;
-  }
-  return null;
-}
-
-// Update schema
-router.post(
-  "/schema",
-  authAdmin,
-  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    const db = getDB(env);
-    const data = await db.batch([
-      ...["users", "namespaces", "ids"].map((t) =>
-        db.prepare(`DROP TABLE IF EXISTS ${t}`)
-      ),
-      ...schema.map((s) => db.prepare(s)),
-    ]);
-    return Response.json(data);
-  }
-);
-router.get(
-  "/test",
-  authAdmin,
-  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    const db = getDB(env);
-    const users = await db
-      .prepare("SELECT user_id,username,created_on FROM users")
-      .all();
-    const namespaces = await db
-      .prepare("SELECT namespace_id,user_id,name,created_on FROM namespaces")
-      .all();
-    const ids = await db
-      .prepare("SELECT id_id,user_id,namespace_id,id,created_on FROM ids")
-      .all();
-    const data = {
-      users: users.results,
-      namespaces: namespaces.results,
-      ids: ids.results,
-    };
-    return new Response(JSON.stringify(data, null, 2));
-  }
-);
+/// ADMIN ///
+router.post("/schema", auth.admin, admin.updateSchema);
+router.get("/admin", auth.admin, admin.getAllData);
 
 /// USERS ///
-// List users
-router.get(
-  "/users",
-  authAdmin,
-  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    const db = getDB(env);
-    const { results } = await db.prepare("SELECT * FROM users").all();
-    return Response.json(results || []);
-  }
-);
-
+// Get users
+router.get("/users", auth.admin, users.getUsers);
 // Create user
-router.post(
-  "/:user",
-  authAdmin,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-    // Check if the user already exists
-    const userID = await getUserID(db, req.params.user);
-    if (userID) {
-      return alreadyExists("user");
-    }
-
-    const res = await db
-      .prepare("INSERT INTO users (username,created_on) VALUES (?,?)")
-      .bind(req.params.user, now())
-      .run();
-    return Response.json(res);
-  }
-);
-
+router.post("/:user", auth.admin, users.createUser);
 // Delete user
-router.delete(
-  "/:user",
-  authAdmin,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-    const data = await db
-      .prepare("DELETE FROM users WHERE username = ?")
-      .bind(req.params.user)
-      .run();
-    return Response.json(data);
-  }
-);
+router.delete("/:user", auth.admin, users.deleteUser);
 
 /// Namespaces ///
 // List namespaces
-router.get(
-  "/:user",
-  authUser,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-    // get the user
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-
-    const namespaces = await db
-      .prepare("SELECT * FROM namespaces WHERE user_id = ?")
-      .bind(userID)
-      .all();
-    return Response.json(namespaces.results || []);
-  }
-);
-
+router.get("/:user", auth.user, namespaces.getNamespaces);
 // Create namespace
-router.post(
-  "/:user/:namespace",
-  authUser,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-
-    // get the user
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-
-    // Check if the namespace already exists
-    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
-    if (namespaceID) {
-      return alreadyExists("namespace");
-    }
-    const res = await db
-      .prepare(
-        "INSERT INTO namespaces (user_id,name,created_on) VALUES (?,?,?)"
-      )
-      .bind(userID, req.params.namespace, now())
-      .run();
-    return Response.json(res);
-  }
-);
-
+router.post("/:user/:namespace", auth.user, namespaces.createNamespace);
 // Delete namespace
-router.delete(
-  "/:user/:namespace",
-  authUser,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-    // get the user
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-    // Check if the namespace exists
-    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
-    if (!namespaceID) {
-      return notExists("namespace");
-    }
-    // Delete the namespace
-    const res = await db
-      .prepare("DELETE FROM namespaces WHERE user_id = ? AND name = ?")
-      .bind(userID, req.params.namespace)
-      .run();
-    return Response.json(res);
-  }
-);
+router.delete("/:user/:namespace", auth.user, namespaces.deleteNamespace);
 
 /// IDs ///
 // List IDs
-router.get(
-  "/:user/:namespace",
-  authUser,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-    // get the user
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-
-    // get the namespace
-    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
-    if (!namespaceID) {
-      return notExists("namespace");
-    }
-
-    const ids = await db
-      .prepare(
-        "SELECT id,created_on FROM ids WHERE user_id = ? AND namespace_id = ?"
-      )
-      .bind(userID, namespaceID)
-      .all();
-    if (!hasResults<ID>(ids)) {
-      return Response.json([]);
-    }
-    return Response.json(
-      ids.results.map((r: any) => {
-        return { id: r.id, created_on: new Date(r.created_on).toISOString() };
-      })
-    );
-  }
-);
-
+router.get("/:user/:namespace", auth.user, ids.getIDs);
 // Create ID
-router.get(
-  "/:user/:namespace/new",
-  authUser,
-  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
-    if (!req.params) {
-      return missingParams();
-    }
-    const db = getDB(env);
-
-    // Make sure the user exists
-    const userID = await getUserID(db, req.params.user);
-    if (!userID) {
-      return notExists("user");
-    }
-
-    // make sure the namespace exists
-    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
-    if (!namespaceID) {
-      return notExists("namespace");
-    }
-
-    // Try up to 10 times to generate an ID
-    let idLen = 5;
-    let id = makeID(idLen);
-    for (let i = 0; i < 10; i++) {
-      const ids = await db
-        .prepare("SELECT * FROM ids WHERE namespace_id = ? AND id = ?")
-        .bind(namespaceID, id)
-        .all();
-      if (!hasResults<ID>(ids)) {
-        console.log("trying 2");
-        await db
-          .prepare(
-            "INSERT INTO ids (user_id,namespace_id,id,created_on) VALUES (?,?,?,?)"
-          )
-          .bind(userID, namespaceID, id, now())
-          .run();
-        return Response.json({ id: id, tries: i + 1 });
-      } else {
-        id = makeID(idLen);
-      }
-    }
-  }
-);
-
+router.get("/:user/:namespace/new", auth.user, ids.createID);
 // Delete ID
-router.delete(
-  "/:user/:namespace/:id",
-  authUser,
-  async (_req: IttyRequest, _env: Env, _ctx: ExecutionContext) => {
-    return new Response(`not implemented`, { status: 501 });
-  }
-);
+router.delete("/:user/:namespace/:id", auth.user, ids.deleteID);
 
 // Run api
 export default {

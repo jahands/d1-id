@@ -1,3 +1,7 @@
+import { Request as IttyRequest } from "itty-router";
+
+export type IttyRequest = IttyRequest;
+
 export type MethodType =
   | "GET"
   | "POST"

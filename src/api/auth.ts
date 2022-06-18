@@ -1,11 +1,11 @@
 import { Request as IttyRequest } from "itty-router";
 
-import { Env } from "../types";
+import { Env } from "./types";
 
 const KEYS = (env: Env) =>
   JSON.parse(env.API_KEYS) as { keys: Record<string, string> };
 
-export function authUser(
+function authUser(
   req: IttyRequest,
   env: Env,
   _ctx: ExecutionContext
@@ -36,7 +36,7 @@ export function authUser(
   }
 }
 
-export function authAdmin(
+function authAdmin(
   req: IttyRequest,
   env: Env,
   _ctx: ExecutionContext
@@ -65,4 +65,9 @@ export function authAdmin(
       }
     );
   }
+}
+
+export default {
+  user: authUser,
+  admin: authAdmin,
 }
