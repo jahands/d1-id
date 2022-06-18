@@ -14,6 +14,7 @@ const router = Router<IRequest, IMethods>();
 /// ADMIN ///
 router.post("/schema", auth.admin, admin.updateSchema);
 router.get("/admin", auth.admin, admin.getAllData);
+router.get("/stats", auth.admin, admin.getStats);
 
 /// USERS ///
 // Get users

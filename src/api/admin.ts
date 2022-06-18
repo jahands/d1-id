@@ -36,7 +36,18 @@ async function getAllData(_req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   return new Response(JSON.stringify(data, null, 2));
 }
 
+async function getStats(_req: IttyRequest, env: Env, _ctx: ExecutionContext) {
+  const db = getDB(env);
+  const res = await db.batch(
+    ["PRAGMA table_list", "PRAGMA table_info", "PRAGMA data_version"].map((s) =>
+      db.prepare(s)
+    )
+  );
+  return new Response(JSON.stringify(res, null, 2));
+}
+
 export default {
   updateSchema,
   getAllData,
+  getStats,
 };
