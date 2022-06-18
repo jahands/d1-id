@@ -5,87 +5,15 @@ import {
   Route,
   Router,
 } from "itty-router";
+import { authAdmin, authUser } from "./api/auth";
+import { ID } from "./api/ids";
+import { Namespace } from "./api/namespaces";
+import { User } from "./api/users";
 import { schema } from "./schema";
+import { IRequest, IMethods, Env } from "./types";
 
-const actions = [
-  "create",
-  "insert",
-  "query-first",
-  "query-all",
-  "query-raw",
-  "query-exec",
-  "batch",
-  "dump.sqlite",
-  "exception",
-  "pragmas",
-];
-
-export interface Env {
-  // Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-  // MY_KV_NAMESPACE: KVNamespace;
-  //
-  // Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
-  // MY_DURABLE_OBJECT: DurableObjectNamespace;
-  //
-  // Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
-  // MY_BUCKET: R2Bucket;
-  D1: any;
-  API_KEYS: string;
-}
-
-const KEYS = (env: Env) =>
-  JSON.parse(env.API_KEYS) as { keys: Record<string, string> };
-
-type MethodType =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "DELETE"
-  | "PATCH"
-  | "HEAD"
-  | "OPTIONS";
-
-interface IRequest extends IttyRequest {
-  method: MethodType; // method is required to be on the interface
-  url: string; // url is required to be on the interface
-  optional?: string;
-}
-
-interface IMethods extends IHTTPMethods {
-  get: Route;
-  post: Route;
-  put: Route;
-  delete: Route;
-  patch: Route;
-  head: Route;
-  options: Route;
-}
 const router = Router<IRequest, IMethods>();
 
-type Handler = (
-  req: IttyRequest,
-  env: Env,
-  ctx: ExecutionContext
-) => Promise<Response>;
-
-type User = {
-  user_id: number;
-  username: string;
-  created_on: number;
-};
-type Namespace = {
-  namespace_id: number;
-  name: string;
-  created_on: number;
-  user_id: number;
-};
-type ID = {
-  id_id: number;
-  id: string;
-  created_on: number;
-  user_id: number;
-  namespace_id: number;
-};
 type Results<Type> = {
   results: Type[];
 };
@@ -167,73 +95,11 @@ async function getNamespaceID(
   return null;
 }
 
-function authUser(
-  req: IttyRequest,
-  env: Env,
-  _ctx: ExecutionContext
-): Response | undefined {
-  const isAuthed = () => {
-    const keys = KEYS(env).keys;
-    // Make sure required request data is present
-    if (!req.query || !req.params || !req.params.user) return false;
-
-    // Get the API key
-    const reqKey = req.query["key"];
-    if (!reqKey) return false;
-
-    // Make sure the API key is valid
-    const user = req.params.user;
-    const userKey = keys[user];
-    if (!userKey) return false;
-    return reqKey === userKey;
-  };
-
-  if (!isAuthed()) {
-    return Response.json(
-      { error: `forbidden` },
-      {
-        status: 403,
-      }
-    );
-  }
-}
-
-function authAdmin(
-  req: IttyRequest,
-  env: Env,
-  _ctx: ExecutionContext
-): Response | undefined {
-  const isAuthed = () => {
-    const keys = KEYS(env).keys;
-    // Make sure required request data is present
-    if (!req.query) return false;
-
-    // Get the API key
-    const reqKey = req.query["key"];
-    if (!reqKey) return false;
-
-    // Make sure the API key is valid
-    const user = "jacob"; // hardcoded admin user
-    const userKey = keys[user];
-    if (!userKey) return false;
-    return reqKey === userKey;
-  };
-
-  if (!isAuthed()) {
-    return Response.json(
-      { error: `forbidden` },
-      {
-        status: 403,
-      }
-    );
-  }
-}
-
 // Update schema
 router.post(
   "/schema",
   authAdmin,
-  async (_req, env: Env, _ctx: ExecutionContext) => {
+  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     const db = getDB(env);
     const data = await db.batch([
       ...["users", "namespaces", "ids"].map((t) =>
@@ -247,7 +113,7 @@ router.post(
 router.get(
   "/test",
   authAdmin,
-  async (_req, env: Env, _ctx: ExecutionContext) => {
+  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     const db = getDB(env);
     const users = await db
       .prepare("SELECT user_id,username,created_on FROM users")
@@ -272,7 +138,7 @@ router.get(
 router.get(
   "/users",
   authAdmin,
-  async (_req, env: Env, _ctx: ExecutionContext) => {
+  async (_req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     const db = getDB(env);
     const { results } = await db.prepare("SELECT * FROM users").all();
     return Response.json(results || []);
@@ -283,7 +149,7 @@ router.get(
 router.post(
   "/:user",
   authAdmin,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -306,7 +172,7 @@ router.post(
 router.delete(
   "/:user",
   authAdmin,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -328,7 +194,7 @@ router.delete(
 router.get(
   "/:user",
   authUser,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -351,7 +217,7 @@ router.get(
 router.post(
   "/:user/:namespace",
   authUser,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -382,7 +248,7 @@ router.post(
 router.delete(
   "/:user/:namespace",
   authUser,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -411,7 +277,7 @@ router.delete(
 router.get(
   "/:user/:namespace",
   authUser,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -449,7 +315,7 @@ router.get(
 router.get(
   "/:user/:namespace/new",
   authUser,
-  async (req, env: Env, _ctx: ExecutionContext) => {
+  async (req: IttyRequest, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -495,7 +361,7 @@ router.get(
 router.delete(
   "/:user/:namespace/:id",
   authUser,
-  async (_req, _env: Env, _ctx: ExecutionContext) => {
+  async (_req: IttyRequest, _env: Env, _ctx: ExecutionContext) => {
     return new Response(`not implemented`, { status: 501 });
   }
 );
