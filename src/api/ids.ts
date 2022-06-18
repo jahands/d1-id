@@ -156,5 +156,6 @@ async function deleteID(_req: IttyRequest, _env: Env, _ctx: ExecutionContext) {
 export default {
   getIDs,
   generateID,
+  addID,
   deleteID,
 };
