@@ -1,6 +1,9 @@
 import { Database } from "@cloudflare/d1";
 import {
-  IHTTPMethods, Request as IttyRequest, Route, Router
+  IHTTPMethods,
+  Request as IttyRequest,
+  Route,
+  Router,
 } from "itty-router";
 import { schema } from "./schema";
 
@@ -27,7 +30,11 @@ export interface Env {
   // Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
   // MY_BUCKET: R2Bucket;
   D1: any;
+  API_KEYS: string;
 }
+
+const KEYS = (env: Env) =>
+  JSON.parse(env.API_KEYS) as { keys: Record<string, string> };
 
 type MethodType =
   | "GET"
@@ -96,19 +103,28 @@ function getDB(env: Env): Database {
 }
 const now = () => new Date().getTime();
 function missingParams() {
-  return new Response(JSON.stringify({error: `missing params` }), {
-    status: 400,
-  });
+  return Response.json(
+    { error: `missing params` },
+    {
+      status: 400,
+    }
+  );
 }
 function alreadyExists(name: string) {
-  return new Response(JSON.stringify({ error: `${name} already exists` }), {
-    status: 400,
-  });
+  return Response.json(
+    { error: `${name} already exists` },
+    {
+      status: 400,
+    }
+  );
 }
 function notExists(name: string) {
-  return new Response(JSON.stringify({ error: `${name} does not exists` }), {
-    status: 400,
-  });
+  return Response.json(
+    { error: `${name} does not exists` },
+    {
+      status: 400,
+    }
+  );
 }
 
 function makeID(length: number) {
@@ -151,104 +167,191 @@ async function getNamespaceID(
   return null;
 }
 
-// Update schema
-router.post("/schema", async (req, env: Env, ctx: ExecutionContext) => {
-  const db = getDB(env);
-  const data = await db.batch([
-    ...["users", "namespaces", "ids"].map((t) =>
-      db.prepare(`DROP TABLE IF EXISTS ${t}`)
-    ),
-    ...schema.map((s) => db.prepare(s)),
-  ]);
-  return new Response(JSON.stringify(data));
-});
-router.get("/test", async (req, env: Env, ctx: ExecutionContext) => {
-  const db = getDB(env);
-  const users = await db
-    .prepare("SELECT user_id,username,created_on FROM users")
-    .all();
-  const namespaces = await db
-    .prepare("SELECT namespace_id,user_id,name,created_on FROM namespaces")
-    .all();
-  const ids = await db
-    .prepare("SELECT id_id,user_id,namespace_id,id,created_on FROM ids")
-    .all();
-  const data = {
-    users: users.results,
-    namespaces: namespaces.results,
-    ids: ids.results,
+function authUser(
+  req: IttyRequest,
+  env: Env,
+  _ctx: ExecutionContext
+): Response | undefined {
+  const isAuthed = () => {
+    const keys = KEYS(env).keys;
+    // Make sure required request data is present
+    if (!req.query || !req.params || !req.params.user) return false;
+
+    // Get the API key
+    const reqKey = req.query["key"];
+    if (!reqKey) return false;
+
+    // Make sure the API key is valid
+    const user = req.params.user;
+    const userKey = keys[user];
+    if (!userKey) return false;
+    return reqKey === userKey;
   };
-  return new Response(JSON.stringify(data, null, 2));
-});
+
+  if (!isAuthed()) {
+    return Response.json(
+      { error: `forbidden` },
+      {
+        status: 403,
+      }
+    );
+  }
+}
+
+function authAdmin(
+  req: IttyRequest,
+  env: Env,
+  _ctx: ExecutionContext
+): Response | undefined {
+  const isAuthed = () => {
+    const keys = KEYS(env).keys;
+    // Make sure required request data is present
+    if (!req.query) return false;
+
+    // Get the API key
+    const reqKey = req.query["key"];
+    if (!reqKey) return false;
+
+    // Make sure the API key is valid
+    const user = "jacob"; // hardcoded admin user
+    const userKey = keys[user];
+    if (!userKey) return false;
+    return reqKey === userKey;
+  };
+
+  if (!isAuthed()) {
+    return Response.json(
+      { error: `forbidden` },
+      {
+        status: 403,
+      }
+    );
+  }
+}
+
+// Update schema
+router.post(
+  "/schema",
+  authAdmin,
+  async (_req, env: Env, _ctx: ExecutionContext) => {
+    const db = getDB(env);
+    const data = await db.batch([
+      ...["users", "namespaces", "ids"].map((t) =>
+        db.prepare(`DROP TABLE IF EXISTS ${t}`)
+      ),
+      ...schema.map((s) => db.prepare(s)),
+    ]);
+    return Response.json(data);
+  }
+);
+router.get(
+  "/test",
+  authAdmin,
+  async (_req, env: Env, _ctx: ExecutionContext) => {
+    const db = getDB(env);
+    const users = await db
+      .prepare("SELECT user_id,username,created_on FROM users")
+      .all();
+    const namespaces = await db
+      .prepare("SELECT namespace_id,user_id,name,created_on FROM namespaces")
+      .all();
+    const ids = await db
+      .prepare("SELECT id_id,user_id,namespace_id,id,created_on FROM ids")
+      .all();
+    const data = {
+      users: users.results,
+      namespaces: namespaces.results,
+      ids: ids.results,
+    };
+    return new Response(JSON.stringify(data, null, 2));
+  }
+);
 
 /// USERS ///
 // List users
-router.get("/users", async (req, env: Env, ctx: ExecutionContext) => {
-  const db = getDB(env);
-  const { results } = await db.prepare("SELECT * FROM users").all();
-  return new Response(JSON.stringify(results || []));
-});
+router.get(
+  "/users",
+  authAdmin,
+  async (_req, env: Env, _ctx: ExecutionContext) => {
+    const db = getDB(env);
+    const { results } = await db.prepare("SELECT * FROM users").all();
+    return Response.json(results || []);
+  }
+);
 
 // Create user
-router.post("/:user", async (req, env: Env, ctx: ExecutionContext) => {
-  if (!req.params) {
-    return missingParams();
-  }
-  const db = getDB(env);
-  // Check if the user already exists
-  const userID = await getUserID(db, req.params.user);
-  if (userID) {
-    return alreadyExists("user");
-  }
+router.post(
+  "/:user",
+  authAdmin,
+  async (req, env: Env, _ctx: ExecutionContext) => {
+    if (!req.params) {
+      return missingParams();
+    }
+    const db = getDB(env);
+    // Check if the user already exists
+    const userID = await getUserID(db, req.params.user);
+    if (userID) {
+      return alreadyExists("user");
+    }
 
-  const res = await db
-    .prepare("INSERT INTO users (username,created_on) VALUES (?,?)")
-    .bind(req.params.user, now())
-    .run();
-  return new Response(JSON.stringify(res));
-});
+    const res = await db
+      .prepare("INSERT INTO users (username,created_on) VALUES (?,?)")
+      .bind(req.params.user, now())
+      .run();
+    return Response.json(res);
+  }
+);
 
 // Delete user
-router.delete("/:user", async (req, env: Env, ctx: ExecutionContext) => {
-  if (!req.params) {
-    return missingParams();
+router.delete(
+  "/:user",
+  authAdmin,
+  async (req, env: Env, _ctx: ExecutionContext) => {
+    if (!req.params) {
+      return missingParams();
+    }
+    const db = getDB(env);
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
+    }
+    const data = await db
+      .prepare("DELETE FROM users WHERE username = ?")
+      .bind(req.params.user)
+      .run();
+    return Response.json(data);
   }
-  const db = getDB(env);
-  const userID = await getUserID(db, req.params.user);
-  if (!userID) {
-    return notExists("user");
-  }
-  const data = await db
-    .prepare("DELETE FROM users WHERE username = ?")
-    .bind(req.params.user)
-    .run();
-  return new Response(JSON.stringify(data));
-});
+);
 
 /// Namespaces ///
 // List namespaces
-router.get("/:user", async (req, env: Env, ctx: ExecutionContext) => {
-  if (!req.params) {
-    return missingParams();
-  }
-  const db = getDB(env);
-  // get the user
-  const userID = await getUserID(db, req.params.user);
-  if (!userID) {
-    return notExists("user");
-  }
+router.get(
+  "/:user",
+  authUser,
+  async (req, env: Env, _ctx: ExecutionContext) => {
+    if (!req.params) {
+      return missingParams();
+    }
+    const db = getDB(env);
+    // get the user
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
+    }
 
-  const namespaces = await db
-    .prepare("SELECT * FROM namespaces WHERE user_id = ?")
-    .bind(userID)
-    .all();
-  return new Response(JSON.stringify(namespaces.results || []));
-});
+    const namespaces = await db
+      .prepare("SELECT * FROM namespaces WHERE user_id = ?")
+      .bind(userID)
+      .all();
+    return Response.json(namespaces.results || []);
+  }
+);
 
 // Create namespace
 router.post(
   "/:user/:namespace",
-  async (req, env: Env, ctx: ExecutionContext) => {
+  authUser,
+  async (req, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -271,14 +374,15 @@ router.post(
       )
       .bind(userID, req.params.namespace, now())
       .run();
-    return new Response(JSON.stringify(res));
+    return Response.json(res);
   }
 );
 
 // Delete namespace
 router.delete(
   "/:user/:namespace",
-  async (req, env: Env, ctx: ExecutionContext) => {
+  authUser,
+  async (req, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -298,7 +402,7 @@ router.delete(
       .prepare("DELETE FROM namespaces WHERE user_id = ? AND name = ?")
       .bind(userID, req.params.namespace)
       .run();
-    return new Response(JSON.stringify(res));
+    return Response.json(res);
   }
 );
 
@@ -306,7 +410,8 @@ router.delete(
 // List IDs
 router.get(
   "/:user/:namespace",
-  async (req, env: Env, ctx: ExecutionContext) => {
+  authUser,
+  async (req, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -330,14 +435,12 @@ router.get(
       .bind(userID, namespaceID)
       .all();
     if (!hasResults<ID>(ids)) {
-      return new Response(JSON.stringify([]))
+      return Response.json([]);
     }
-    return new Response(
-      JSON.stringify(
-        ids.results.map((r: any) => {
-          return { id: r.id, created_on: new Date(r.created_on).toISOString() };
-        })
-      )
+    return Response.json(
+      ids.results.map((r: any) => {
+        return { id: r.id, created_on: new Date(r.created_on).toISOString() };
+      })
     );
   }
 );
@@ -345,7 +448,8 @@ router.get(
 // Create ID
 router.get(
   "/:user/:namespace/new",
-  async (req, env: Env, ctx: ExecutionContext) => {
+  authUser,
+  async (req, env: Env, _ctx: ExecutionContext) => {
     if (!req.params) {
       return missingParams();
     }
@@ -372,14 +476,14 @@ router.get(
         .bind(namespaceID, id)
         .all();
       if (!hasResults<ID>(ids)) {
-        console.log("trying 2")
+        console.log("trying 2");
         await db
           .prepare(
             "INSERT INTO ids (user_id,namespace_id,id,created_on) VALUES (?,?,?,?)"
           )
           .bind(userID, namespaceID, id, now())
           .run();
-        return new Response(JSON.stringify({ id: id, tries: i + 1 }));
+        return Response.json({ id: id, tries: i + 1 });
       } else {
         id = makeID(idLen);
       }
@@ -390,7 +494,8 @@ router.get(
 // Delete ID
 router.delete(
   "/:user/:namespace/:id",
-  async (req, env: Env, ctx: ExecutionContext) => {
+  authUser,
+  async (_req, _env: Env, _ctx: ExecutionContext) => {
     return new Response(`not implemented`, { status: 501 });
   }
 );
