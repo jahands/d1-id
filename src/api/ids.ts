@@ -55,7 +55,7 @@ async function getIDs(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   );
 }
 
-async function createID(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
+async function generateID(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   if (!req.params) {
     return missingParams();
   }
@@ -102,6 +102,6 @@ async function deleteID(_req: IttyRequest, _env: Env, _ctx: ExecutionContext) {
 
 export default {
     getIDs,
-    createID,
+    generateID,
     deleteID
 };
