@@ -7,6 +7,7 @@ import ids from "./api/ids";
 import admin from "./api/admin";
 
 import { IRequest, IMethods } from "./api/types";
+import { lowerParams } from "./api/util";
 
 const router = Router<IRequest, IMethods>();
 
@@ -16,29 +17,39 @@ router.get("/admin", auth.admin, admin.getAllData);
 
 /// USERS ///
 // Get users
-router.get("/users", auth.admin, users.getUsers);
+router.get("/users", lowerParams, auth.admin, users.getUsers);
 // Create user
-router.post("/:user", auth.admin, users.createUser);
+router.post("/:user", lowerParams, lowerParams, auth.admin, users.createUser);
 // Delete user
-router.delete("/:user", auth.admin, users.deleteUser);
+router.delete("/:user", lowerParams, auth.admin, users.deleteUser);
 
 /// Namespaces ///
 // List namespaces
-router.get("/:user", auth.user, namespaces.getNamespaces);
+router.get("/:user", lowerParams, auth.user, namespaces.getNamespaces);
 // Create namespace
-router.post("/:user/:namespace", auth.user, namespaces.createNamespace);
+router.post(
+  "/:user/:namespace",
+  lowerParams,
+  auth.user,
+  namespaces.createNamespace
+);
 // Delete namespace
-router.delete("/:user/:namespace", auth.user, namespaces.deleteNamespace);
+router.delete(
+  "/:user/:namespace",
+  lowerParams,
+  auth.user,
+  namespaces.deleteNamespace
+);
 
 /// IDs ///
 // List IDs
-router.get("/:user/:namespace", auth.user, ids.getIDs);
+router.get("/:user/:namespace", lowerParams, auth.user, ids.getIDs);
 // Generate ID
-router.get("/:user/:namespace/new", auth.user, ids.generateID);
+router.get("/:user/:namespace/new", lowerParams, auth.user, ids.generateID);
 // Add ID
-router.post("/:user/:namespace/:id", auth.user, ids.generateID);
+router.post("/:user/:namespace/:id", lowerParams, auth.user, ids.generateID);
 // Delete ID
-router.delete("/:user/:namespace/:id", auth.user, ids.deleteID);
+router.delete("/:user/:namespace/:id", lowerParams, auth.user, ids.deleteID);
 
 // Run api
 export default {

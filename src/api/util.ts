@@ -1,3 +1,5 @@
+import { IttyRequest, Env } from "./types";
+
 export type Results<Type> = {
   results: Type[];
 };
@@ -30,4 +32,21 @@ export function notExists(name: string) {
       status: 400,
     }
   );
+}
+
+// Converts whitelisted params to lowercase
+export function lowerParams(
+  req: IttyRequest,
+  _env: Env,
+  _ctx: ExecutionContext
+) {
+  const whitelist = ["user", "namespace"];
+  const params = req.params;
+  if (!params) return;
+  for (const key in params) {
+    if (whitelist.includes(key)) {
+      params[key] = params[key].toLowerCase();
+    }
+  }
+  req.params = params;
 }
