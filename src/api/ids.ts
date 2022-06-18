@@ -48,7 +48,7 @@ async function getIDs(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
 
   const ids = await db
     .prepare(
-      "SELECT id,created_on FROM ids WHERE user_id = ? AND namespace_id = ?"
+      "SELECT name,created_on FROM ids WHERE user_id = ? AND namespace_id = ?"
     )
     .bind(userID, namespaceID)
     .all();
