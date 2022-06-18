@@ -2,6 +2,7 @@ name = "d1-id"
 main = "src/index.ts"
 compatibility_date = "2022-06-17"
 route = "id.uuid.rocks/*"
+usage_model = "unbound"
 
 [[unsafe.bindings]]
 name = "D1"
