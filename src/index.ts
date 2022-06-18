@@ -35,6 +35,8 @@ router.delete("/:user/:namespace", auth.user, namespaces.deleteNamespace);
 router.get("/:user/:namespace", auth.user, ids.getIDs);
 // Generate ID
 router.get("/:user/:namespace/new", auth.user, ids.generateID);
+// Add ID
+router.post("/:user/:namespace/:id", auth.user, ids.generateID);
 // Delete ID
 router.delete("/:user/:namespace/:id", auth.user, ids.deleteID);
 

@@ -14,12 +14,12 @@ export const schema = [
         FOREIGN KEY ( user_id ) REFERENCES users( user_id ) ON DELETE CASCADE ON UPDATE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS ids ( 
-        id_id INTEGER PRIMARY KEY,
-        id                    VARCHAR(100) NOT NULL,
+        _id INTEGER PRIMARY KEY,
+        name                  VARCHAR(100) NOT NULL,
         created_on            INTEGER NOT NULL,
         user_id               INTEGER NOT NULL,
         namespace_id          INTEGER NOT NULL,
-        CONSTRAINT unq_ids_id UNIQUE ( namespace_id,id ),
+        CONSTRAINT unq_ids_id UNIQUE ( namespace_id,name ),
         FOREIGN KEY ( user_id ) REFERENCES users( user_id ) ON DELETE CASCADE ON UPDATE CASCADE
         FOREIGN KEY ( namespace_id ) REFERENCES namespaces( namespace_id ) ON DELETE CASCADE ON UPDATE CASCADE
     );`,

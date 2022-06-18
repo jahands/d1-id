@@ -9,7 +9,7 @@ async function updateSchema(
 ) {
   const db = getDB(env);
   const data = await db.batch([
-    ...["users", "namespaces", "ids"].map((t) =>
+    ...["ids", "namespaces", "users"].map((t) =>
       db.prepare(`DROP TABLE IF EXISTS ${t}`)
     ),
     ...schema.map((s) => db.prepare(s)),
@@ -26,7 +26,7 @@ async function getAllData(_req: IttyRequest, env: Env, _ctx: ExecutionContext) {
     .prepare("SELECT namespace_id,user_id,name,created_on FROM namespaces")
     .all();
   const ids = await db
-    .prepare("SELECT id_id,user_id,namespace_id,id,created_on FROM ids")
+    .prepare("SELECT _id,user_id,namespace_id,name,created_on FROM ids")
     .all();
   const data = {
     users: users.results,
@@ -37,6 +37,6 @@ async function getAllData(_req: IttyRequest, env: Env, _ctx: ExecutionContext) {
 }
 
 export default {
-    updateSchema,
-    getAllData
+  updateSchema,
+  getAllData,
 };
