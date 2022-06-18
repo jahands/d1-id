@@ -1,25 +1,26 @@
 export const schema = [
   `CREATE TABLE IF NOT EXISTS users ( 
+        user_id INTEGER PRIMARY KEY,
         username             VARCHAR(100) NOT NULL,
         created_on           INTEGER NOT NULL,
         CONSTRAINT unq_users_username UNIQUE ( username )
-        PRIMARY KEY ( username )
     );`,
   `CREATE TABLE IF NOT EXISTS namespaces ( 
+        namespace_id INTEGER PRIMARY KEY,
         name                 VARCHAR(100) NOT NULL,
         created_on           INTEGER NOT NULL,
-        username             VARCHAR(100) NOT NULL,
-        CONSTRAINT unq_namespaces_name UNIQUE ( username,name ),
-        PRIMARY KEY ( username, name ),
-        FOREIGN KEY ( username ) REFERENCES users( username ) ON DELETE CASCADE ON UPDATE CASCADE
+        user_id              INTEGER NOT NULL,
+        CONSTRAINT unq_namespaces_name UNIQUE ( user_id,name ),
+        FOREIGN KEY ( user_id ) REFERENCES users( user_id ) ON DELETE CASCADE ON UPDATE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS ids ( 
-        id                   VARCHAR(100) NOT NULL,
-        created_on           INTEGER NOT NULL,
-        namespace            VARCHAR(100) NOT NULL,
-        username             VARCHAR(100) NOT NULL,
-        CONSTRAINT unq_ids_name UNIQUE ( namespace,id ),
-        PRIMARY KEY ( namespace, id )
-        FOREIGN KEY ( username,namespace ) REFERENCES namespaces( username,name ) ON DELETE CASCADE ON UPDATE CASCADE
+        id_id INTEGER PRIMARY KEY,
+        id                    VARCHAR(100) NOT NULL,
+        created_on            INTEGER NOT NULL,
+        user_id               INTEGER NOT NULL,
+        namespace_id          INTEGER NOT NULL,
+        CONSTRAINT unq_ids_id UNIQUE ( namespace_id,id ),
+        FOREIGN KEY ( user_id ) REFERENCES users( user_id ) ON DELETE CASCADE ON UPDATE CASCADE
+        FOREIGN KEY ( namespace_id ) REFERENCES namespaces( namespace_id ) ON DELETE CASCADE ON UPDATE CASCADE
     );`,
 ];

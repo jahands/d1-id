@@ -1,9 +1,6 @@
 import { Database } from "@cloudflare/d1";
 import {
-  Router,
-  Route,
-  Request as IttyRequest,
-  IHTTPMethods,
+  IHTTPMethods, Request as IttyRequest, Route, Router
 } from "itty-router";
 import { schema } from "./schema";
 
@@ -63,6 +60,32 @@ type Handler = (
   env: Env,
   ctx: ExecutionContext
 ) => Promise<Response>;
+
+type User = {
+  user_id: number;
+  username: string;
+  created_on: number;
+};
+type Namespace = {
+  namespace_id: number;
+  name: string;
+  created_on: number;
+  user_id: number;
+};
+type ID = {
+  id_id: number;
+  id: string;
+  created_on: number;
+  user_id: number;
+  namespace_id: number;
+};
+type Results<Type> = {
+  results: Type[];
+};
+function hasResults<Type>(data: any): data is Results<Type> {
+  return data.results !== undefined && data.results.length > 0;
+}
+
 let db: Database;
 
 function getDB(env: Env): Database {
@@ -73,7 +96,19 @@ function getDB(env: Env): Database {
 }
 const now = () => new Date().getTime();
 function missingParams() {
-  return new Response(`missing params`, { status: 400 });
+  return new Response(JSON.stringify({error: `missing params` }), {
+    status: 400,
+  });
+}
+function alreadyExists(name: string) {
+  return new Response(JSON.stringify({ error: `${name} already exists` }), {
+    status: 400,
+  });
+}
+function notExists(name: string) {
+  return new Response(JSON.stringify({ error: `${name} does not exists` }), {
+    status: 400,
+  });
 }
 
 function makeID(length: number) {
@@ -84,6 +119,36 @@ function makeID(length: number) {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
   return result;
+}
+
+async function getUserID(
+  db: Database,
+  username: string
+): Promise<number | null> {
+  const users = await db
+    .prepare("SELECT user_id FROM users WHERE username = ?")
+    .bind(username)
+    .all();
+  if (hasResults<User>(users)) {
+    return users.results[0].user_id;
+  }
+  return null;
+}
+async function getNamespaceID(
+  db: Database,
+  userID: number,
+  name: string
+): Promise<number | null> {
+  const namespaces = await db
+    .prepare(
+      "SELECT namespace_id FROM namespaces WHERE user_id = ? AND name = ?"
+    )
+    .bind(userID, name)
+    .all();
+  if (hasResults<Namespace>(namespaces)) {
+    return namespaces.results[0].namespace_id;
+  }
+  return null;
 }
 
 // Update schema
@@ -99,12 +164,14 @@ router.post("/schema", async (req, env: Env, ctx: ExecutionContext) => {
 });
 router.get("/test", async (req, env: Env, ctx: ExecutionContext) => {
   const db = getDB(env);
-  const users = await db.prepare("SELECT username,created_on FROM users").all();
+  const users = await db
+    .prepare("SELECT user_id,username,created_on FROM users")
+    .all();
   const namespaces = await db
-    .prepare("SELECT username,name,created_on FROM namespaces")
+    .prepare("SELECT namespace_id,user_id,name,created_on FROM namespaces")
     .all();
   const ids = await db
-    .prepare("SELECT username,namespace,id,created_on FROM ids")
+    .prepare("SELECT id_id,user_id,namespace_id,id,created_on FROM ids")
     .all();
   const data = {
     users: users.results,
@@ -119,7 +186,7 @@ router.get("/test", async (req, env: Env, ctx: ExecutionContext) => {
 router.get("/users", async (req, env: Env, ctx: ExecutionContext) => {
   const db = getDB(env);
   const { results } = await db.prepare("SELECT * FROM users").all();
-  return new Response(JSON.stringify(results));
+  return new Response(JSON.stringify(results || []));
 });
 
 // Create user
@@ -129,20 +196,16 @@ router.post("/:user", async (req, env: Env, ctx: ExecutionContext) => {
   }
   const db = getDB(env);
   // Check if the user already exists
-  const { results } = await db
-    .prepare("SELECT * FROM users WHERE username = ?")
-    .bind(req.params.user)
-    .all();
-  if (results && results.length > 0) {
-    return new Response(`User ${req.params.user} already exists`, {
-      status: 400,
-    });
+  const userID = await getUserID(db, req.params.user);
+  if (userID) {
+    return alreadyExists("user");
   }
-  const data = await db
+
+  const res = await db
     .prepare("INSERT INTO users (username,created_on) VALUES (?,?)")
     .bind(req.params.user, now())
     .run();
-  return new Response(JSON.stringify(data));
+  return new Response(JSON.stringify(res));
 });
 
 // Delete user
@@ -151,6 +214,10 @@ router.delete("/:user", async (req, env: Env, ctx: ExecutionContext) => {
     return missingParams();
   }
   const db = getDB(env);
+  const userID = await getUserID(db, req.params.user);
+  if (!userID) {
+    return notExists("user");
+  }
   const data = await db
     .prepare("DELETE FROM users WHERE username = ?")
     .bind(req.params.user)
@@ -165,11 +232,17 @@ router.get("/:user", async (req, env: Env, ctx: ExecutionContext) => {
     return missingParams();
   }
   const db = getDB(env);
-  const { results } = await db
-    .prepare("SELECT * FROM namespaces WHERE username = ?")
-    .bind(req.params.user)
+  // get the user
+  const userID = await getUserID(db, req.params.user);
+  if (!userID) {
+    return notExists("user");
+  }
+
+  const namespaces = await db
+    .prepare("SELECT * FROM namespaces WHERE user_id = ?")
+    .bind(userID)
     .all();
-  return new Response(JSON.stringify(results));
+  return new Response(JSON.stringify(namespaces.results || []));
 });
 
 // Create namespace
@@ -181,32 +254,24 @@ router.post(
     }
     const db = getDB(env);
 
-    // Make sure the user exists
-    const { results: userResults } = await db
-      .prepare("SELECT * FROM users WHERE username = ?")
-      .bind(req.params.user)
-      .all();
-    if (!userResults || userResults.length === 0) {
-      return new Response(`User ${req.params.user} does not exist`);
+    // get the user
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
     }
 
     // Check if the namespace already exists
-    const { results } = await db
-      .prepare("SELECT * FROM namespaces WHERE username = ? AND name = ?")
-      .bind(req.params.user, req.params.namespace)
-      .all();
-    if (results && results.length > 0) {
-      return new Response(`Namespace ${req.params.namespace} already exists`, {
-        status: 400,
-      });
+    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+    if (namespaceID) {
+      return alreadyExists("namespace");
     }
-    const data = await db
+    const res = await db
       .prepare(
-        "INSERT INTO namespaces (username,name,created_on) VALUES (?,?,?)"
+        "INSERT INTO namespaces (user_id,name,created_on) VALUES (?,?,?)"
       )
-      .bind(req.params.user, req.params.namespace, now())
+      .bind(userID, req.params.namespace, now())
       .run();
-    return new Response(JSON.stringify(data));
+    return new Response(JSON.stringify(res));
   }
 );
 
@@ -218,11 +283,22 @@ router.delete(
       return missingParams();
     }
     const db = getDB(env);
-    const data = await db
-      .prepare("DELETE FROM namespaces WHERE username = ? AND name = ?")
-      .bind(req.params.user, req.params.namespace)
+    // get the user
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
+    }
+    // Check if the namespace exists
+    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+    if (!namespaceID) {
+      return notExists("namespace");
+    }
+    // Delete the namespace
+    const res = await db
+      .prepare("DELETE FROM namespaces WHERE user_id = ? AND name = ?")
+      .bind(userID, req.params.namespace)
       .run();
-    return new Response(JSON.stringify(data));
+    return new Response(JSON.stringify(res));
   }
 );
 
@@ -235,15 +311,30 @@ router.get(
       return missingParams();
     }
     const db = getDB(env);
-    const { results } = await db
+    // get the user
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
+    }
+
+    // get the namespace
+    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+    if (!namespaceID) {
+      return notExists("namespace");
+    }
+
+    const ids = await db
       .prepare(
-        "SELECT id,created_on FROM ids WHERE username = ? AND namespace = ?"
+        "SELECT id,created_on FROM ids WHERE user_id = ? AND namespace_id = ?"
       )
-      .bind(req.params.user, req.params.namespace)
+      .bind(userID, namespaceID)
       .all();
+    if (!hasResults<ID>(ids)) {
+      return new Response(JSON.stringify([]))
+    }
     return new Response(
       JSON.stringify(
-        results?.map((r: any) => {
+        ids.results.map((r: any) => {
           return { id: r.id, created_on: new Date(r.created_on).toISOString() };
         })
       )
@@ -261,41 +352,34 @@ router.get(
     const db = getDB(env);
 
     // Make sure the user exists
-    const { results: userResults } = await db
-      .prepare("SELECT * FROM users WHERE username = ?")
-      .bind(req.params.user)
-      .all();
-    if (!userResults || userResults.length === 0) {
-      return new Response(`User ${req.params.user} does not exist`);
+    const userID = await getUserID(db, req.params.user);
+    if (!userID) {
+      return notExists("user");
     }
 
     // make sure the namespace exists
-    const { results: nsResult } = await db
-      .prepare("SELECT * FROM namespaces WHERE username = ? AND name = ?")
-      .bind(req.params.user, req.params.namespace)
-      .all();
-    if (!nsResult || nsResult.length === 0) {
-      return new Response(
-        `Namespace ${req.params.namespace} does not exist for user ${req.params.user}`
-      );
+    const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+    if (!namespaceID) {
+      return notExists("namespace");
     }
 
     // Try up to 10 times to generate an ID
     let idLen = 5;
     let id = makeID(idLen);
     for (let i = 0; i < 10; i++) {
-      const { results } = await db
-        .prepare("SELECT * FROM ids WHERE namespace = ? AND id = ?")
-        .bind(req.params.namespace, id)
+      const ids = await db
+        .prepare("SELECT * FROM ids WHERE namespace_id = ? AND id = ?")
+        .bind(namespaceID, id)
         .all();
-      if (results && results.length == 0) {
-        const data = await db
+      if (!hasResults<ID>(ids)) {
+        console.log("trying 2")
+        await db
           .prepare(
-            "INSERT INTO ids (username,namespace,id,created_on) VALUES (?,?,?,?)"
+            "INSERT INTO ids (user_id,namespace_id,id,created_on) VALUES (?,?,?,?)"
           )
-          .bind(req.params.user, req.params.namespace, id, now())
+          .bind(userID, namespaceID, id, now())
           .run();
-        return new Response(JSON.stringify({ id: id }));
+        return new Response(JSON.stringify({ id: id, tries: i + 1 }));
       } else {
         id = makeID(idLen);
       }
