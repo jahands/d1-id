@@ -19,13 +19,18 @@ export type ID = {
   namespace_id: number;
 };
 
+const blacklist = ["fuk", "sex", "fuck", "damn", "shit", "hell"];
+
 function makeID(length: number) {
-  var result = "";
-  var characters = "abcdefghijklmnopqrstuvwxyz0123456789";
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
+  let result: string;
+  let characters = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let charactersLength = characters.length;
+  do {
+    result = "";
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+  } while (blacklist.some((b) => result.includes(b)));
   return result;
 }
 
