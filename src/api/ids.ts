@@ -1,5 +1,4 @@
 import { Database } from "@cloudflare/d1";
-import { getDB } from "./db";
 import { getNamespaceID } from "./namespaces";
 import { IttyRequest, Env } from "./types";
 import users from "./users";
@@ -38,20 +37,19 @@ async function getIDs(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   if (!req.params) {
     return missingParams();
   }
-  const db = getDB(env);
   // get the user
-  const userID = await users.getUserID(db, req.params.user);
+  const userID = await users.getUserID(env.D1, req.params.user);
   if (!userID) {
     return notExists("user");
   }
 
   // get the namespace
-  const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+  const namespaceID = await getNamespaceID(env.D1, userID, req.params.namespace);
   if (!namespaceID) {
     return notExists("namespace");
   }
 
-  const ids = await db
+  const ids = await env.D1
     .prepare(
       "SELECT name,created_on FROM ids WHERE user_id = ? AND namespace_id = ?"
     )
@@ -71,16 +69,15 @@ async function generateID(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   if (!req.params) {
     return missingParams();
   }
-  const db = getDB(env);
 
   // Make sure the user exists
-  const userID = await users.getUserID(db, req.params.user);
+  const userID = await users.getUserID(env.D1, req.params.user);
   if (!userID) {
     return notExists("user");
   }
 
   // make sure the namespace exists
-  const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+  const namespaceID = await getNamespaceID(env.D1, userID, req.params.namespace);
   if (!namespaceID) {
     return notExists("namespace");
   }
@@ -89,10 +86,10 @@ async function generateID(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   let idLen = 5;
   let id = makeID(idLen);
   for (let i = 0; i < 10; i++) {
-    const exists = await getIDsID(db, namespaceID, id);
+    const exists = await getIDsID(env.D1, namespaceID, id);
     if (!exists) {
       console.log("trying 2");
-      await db
+      await env.D1
         .prepare(
           "INSERT INTO ids (user_id,namespace_id,name,created_on) VALUES (?,?,?,?)"
         )
@@ -124,28 +121,27 @@ async function addID(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
   if (!req.params) {
     return missingParams();
   }
-  const db = getDB(env);
 
   // Make sure the user exists
-  const userID = await users.getUserID(db, req.params.user);
+  const userID = await users.getUserID(env.D1, req.params.user);
   if (!userID) {
     return notExists("user");
   }
 
   // make sure the namespace exists
-  const namespaceID = await getNamespaceID(db, userID, req.params.namespace);
+  const namespaceID = await getNamespaceID(env.D1, userID, req.params.namespace);
   if (!namespaceID) {
     return notExists("namespace");
   }
 
   // Make sure the ID doesn't already exist
-  const idID = await getIDsID(db, namespaceID, req.params.id);
+  const idID = await getIDsID(env.D1, namespaceID, req.params.id);
   if (idID) {
     return alreadyExists("id");
   }
 
   // Insert the ID
-  const res = await db
+  const res = await env.D1
     .prepare(
       "INSERT INTO ids (user_id,namespace_id,name,created_on) VALUES (?,?,?,?)"
     )

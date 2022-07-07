@@ -4,7 +4,12 @@ compatibility_date = "2022-06-17"
 route = "id.uuid.rocks/*"
 usage_model = "unbound"
 
-[[unsafe.bindings]]
-name = "D1"
-type = "cfsql"
-database = "ids"
+[[ d1_databases ]]
+binding = "D1"
+database_name = "ids2"
+database_id = "2bac214d-0b99-4f6c-9e18-5e0d4e19e051"
+
+# [[unsafe.bindings]]
+# name = "D1"
+# type = "cfsql"
+# database = "ids"

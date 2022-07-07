@@ -1,4 +1,5 @@
 import { Request as IttyRequest } from "itty-router";
+import { Database } from "@cloudflare/d1";
 
 export type IttyRequest = IttyRequest;
 
@@ -42,6 +43,6 @@ export interface Env {
   //
   // Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
   // MY_BUCKET: R2Bucket;
-  D1: any;
+  D1: Database;
   API_KEYS: string;
 }

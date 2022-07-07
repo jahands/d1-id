@@ -1,5 +1,4 @@
 import { Database } from "@cloudflare/d1";
-import { getDB } from "./db";
 import { IttyRequest, Env } from "./types";
 import users from './users'
 import { alreadyExists, hasResults, missingParams, notExists, now } from "./util";
@@ -27,8 +26,7 @@ async function getUserID(
 
 /** Get user list */
 async function getUsers(_req: IttyRequest, env: Env, _ctx: ExecutionContext) {
-    const db = getDB(env);
-    const { results } = await db.prepare("SELECT * FROM users").all();
+    const { results } = await env.D1.prepare("SELECT * FROM users").all();
     return Response.json(results || []);
 }
 
@@ -36,14 +34,13 @@ async function createUser(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
     if (!req.params) {
         return missingParams();
     }
-    const db = getDB(env);
     // Check if the user already exists
-    const userID = await users.getUserID(db, req.params.user);
+    const userID = await users.getUserID(env.D1, req.params.user);
     if (userID) {
         return alreadyExists("user");
     }
 
-    const res = await db
+    const res = await env.D1
         .prepare("INSERT INTO users (username,created_on) VALUES (?,?)")
         .bind(req.params.user, now())
         .run();
@@ -55,12 +52,11 @@ async function deleteUser(req: IttyRequest, env: Env, _ctx: ExecutionContext) {
     if (!req.params) {
         return missingParams();
     }
-    const db = getDB(env);
-    const userID = await users.getUserID(db, req.params.user);
+    const userID = await users.getUserID(env.D1, req.params.user);
     if (!userID) {
         return notExists("user");
     }
-    const data = await db
+    const data = await env.D1
         .prepare("DELETE FROM users WHERE username = ?")
         .bind(req.params.user)
         .run();
