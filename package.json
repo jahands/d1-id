@@ -9,7 +9,7 @@
   "private": true,
   "scripts": {
     "start": "wrangler dev",
-    "deploy": "wrangler publish"
+    "deploy": "wrangler publish --minify"
   },
   "dependencies": {
     "@cloudflare/d1": "^1.4.1",
