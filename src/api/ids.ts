@@ -18,7 +18,7 @@ export type ID = {
   namespace_id: number;
 };
 
-const blacklist = ["fuk", "sex", "fuck", "damn", "shit", "hell"];
+const blocklist = ["fuk", "sex", "fuck", "damn", "shit", "hell"];
 
 function makeID(length: number) {
   let result: string;
@@ -29,7 +29,7 @@ function makeID(length: number) {
     for (let i = 0; i < length; i++) {
       result += characters.charAt(Math.floor(Math.random() * charactersLength));
     }
-  } while (blacklist.some((b) => result.includes(b)));
+  } while (blocklist.some((b) => result.includes(b)));
   return result;
 }
 
