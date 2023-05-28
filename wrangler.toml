@@ -6,8 +6,8 @@ usage_model = "unbound"
 
 [[ d1_databases ]]
 binding = "D1"
-database_name = "ids2"
-database_id = "2bac214d-0b99-4f6c-9e18-5e0d4e19e051"
+database_name = "ids-fast"
+database_id = "ac85e7be-6beb-4bb2-be2f-b431be12ed40"
 
 # [[unsafe.bindings]]
 # name = "D1"
