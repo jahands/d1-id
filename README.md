@@ -1,3 +1,5 @@
+# MOVED TO https://github.com/jahands/workers-monorepo/tree/main/apps/d1-id
+
 # d1-id
 
 # Spec
